@@ -1,7 +1,7 @@
 novation-launchcontrol-for-Bitwig
 =================================
 
-Simple Novation LaunchControl script for Bitwig
+Simple Novation LaunchControl script for Bitwig (This isn't a 100% implementation, but is a start)
 
 Enable Factory preset 1 to use Macros and Parameters
 Arrows enable moving around Bitwig Tracks and devices

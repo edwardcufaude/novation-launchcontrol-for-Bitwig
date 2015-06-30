@@ -44,7 +44,25 @@ function init()
    
 	// create a transport section for on Factory Preset 1
 	transport = host.createTransportSection();
-	
+   sendMidi( FactoryPagePads.Page1, 9, Colour.YELLOW_LOW );
+
+   transport.addIsPlayingObserver(function(on) {
+        sendMidi( FactoryPagePads.Page1, 10,  on ? Colour.LIME : Colour.GREEN_LOW );
+   });
+   transport.addIsRecordingObserver(function(on) {
+        sendMidi( FactoryPagePads.Page1, 11,  on ? Colour.RED_FULL : Colour.RED_LOW );
+   });
+   transport.addIsWritingArrangerAutomationObserver(function(on) {
+        sendMidi( FactoryPagePads.Page1, 12,  on ? Colour.RED_FULL : Colour.OFF );
+   });
+
+   transport.addIsLoopActiveObserver(function(on) {
+        sendMidi( FactoryPagePads.Page1, 25,  on ? Colour.ORANGE : Colour.OFF );
+   });
+   transport.addClickObserver(function(on) {
+        sendMidi( FactoryPagePads.Page1, 26,  on ? Colour.ORANGE : Colour.OFF );
+   });
+
 	// create a trackbank (arguments are tracks, sends, scenes)
 	trackBank = host.createTrackBankSection(NUM_TRACKS, NUM_SENDS, NUM_SCENES);
 
@@ -117,15 +135,15 @@ function onMidi(status, data1, data2)
 	
 	// make Pads green when pressed
 	if(status < 71 || status > 75) {
-		sendMidi(status, data1, 60);
+//		sendMidi(status, data1, 60);
 	}
 	//If Side Buttons make red when pressed // Doesn't work for some reason
 	else if (data2 == 127) {
-		sendMidi(status, 0x + data1, Colour.RED_FULL);
+		//sendMidi(status, 0x + data1, Colour.RED_FULL);
 	}
 	//Turn Off Side Buttons if not pressed.
 	else if (data2 == 0) {
-		sendMidi(status, 0x + data1, Colour.OFF);	
+		//sendMidi(status, 0x + data1, Colour.OFF);	
 	}
 	
 	if (status == FactoryPagePads.Page1 && data2 == 127)

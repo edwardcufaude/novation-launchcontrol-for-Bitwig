@@ -217,7 +217,6 @@ function onMidi(status, data1, data2)
      } else if (status == FactoryPageKnobs.Page2 && isBottomRow( data1 )){
 	    primaryDevice.getMacro( knobIndex( data1 )).getAmount().set(data2, 128);
 
-
 	} else if (status == FactoryPageKnobs.Page3 && isTopRow( data1 )){
 		trackBank.getTrack( knobIndex( data1 )).getSend(0).set(data2, 128);
 
@@ -229,50 +228,38 @@ function onMidi(status, data1, data2)
 	// If not on a Factory Bank already assigned then make the knobs assignable and assign those arrows on the right of the control to move around the tracks and devices on the screen
 	if (isChannelController(status)) {
 		if (data2 == 127) {
-			if (data1 == SideButton.UP)
-			{
-				if (incontrol_mix)
-				{
-					cursorTrack.selectPrevious();
-				}
-				else
-				{
-					trackBank.scrollTracksPageUp();
-				}
-			}
-			else if (data1 == SideButton.DOWN)
-			{
-				if (incontrol_mix)
-				{
-					cursorTrack.selectNext();
-				}
-				else
-				{
-					trackBank.scrollTracksPageDown();
-				}
-			}
-			else if (data1 == SideButton.LEFT)
-			{
-				if (incontrol_mix)
-				{
-					cursorDevice.selectPrevious();
-					primaryDevice.switchToDevice(DeviceType.ANY, ChainLocation.PREVIOUS)
-				}
-				else
-				{
-					trackBank.scrollTracksPageUp();
-				}
-			}
-			else if (data1 == SideButton.RIGHT)
-			{
-				if (incontrol_mix)
-				{
-					cursorDevice.selectNext();
-					primaryDevice.switchToDevice(DeviceType.ANY, ChainLocation.NEXT)
-				}
-				else
-				{
-					trackBank.scrollTracksPageDown();
+            if (incontrol_mix) {
+                switch( data1 ) {
+                    case SideButton.UP:
+                        cursorTrack.selectPrevious();
+                        break;
+                    case SideButton.DOWN:
+                        cursorTrack.selectNext();
+                        break;
+                    case SideButton.LEFT:
+                        cursorDevice.selectPrevious();
+                        primaryDevice.switchToDevice( DeviceType.ANY, ChainLocation.PREVIOUS);
+                        break;
+                    case SideButton.RIGHT:
+                        cursorDevice.selectNext();
+                        primaryDevice.swtichToDevice( DeviceType.ANY, ChainLocation.NEXT);
+                        break;
+                }
+                    
+            } else {
+                switch( data1 ){
+                    case SideButton.UP:
+					    trackBank.scrollTracksPageUp();
+                        break;
+                    case SideButton.DOWN:
+					    trackBank.scrollTracksPageDown();
+                        break;
+                    case SideButton.LEFT:
+					    trackBank.scrollTracksPageLeft();
+                        break;
+                    case SideButton.RIGHT:
+					    trackBank.scrollTracksPageRight();
+                        break;
 				}
 			}
 		}

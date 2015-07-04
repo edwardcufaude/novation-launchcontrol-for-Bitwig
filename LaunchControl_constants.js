@@ -5,6 +5,47 @@ var NUM_TRACKS = 8;
 var NUM_SENDS = 2;
 var NUM_SCENES = 1;
 
+var Pads = {
+    PAD1:9,
+    PAD2:10,
+    PAD3:11,
+    PAD4:12,
+    PAD5:25,
+    PAD6:26,
+    PAD7:27,
+    PAD8:28
+}
+
+var PadIndex = [
+    Pads.PAD1,
+    Pads.PAD2,
+    Pads.PAD3,
+    Pads.PAD4,
+    Pads.PAD5,
+    Pads.PAD6,
+    Pads.PAD7,
+    Pads.PAD8
+]
+
+var Scenes = {
+    USER1:0,
+    USER2:1,
+    USER3:2,
+    USER4:3,
+    USER5:4,
+    USER6:5,
+    USER7:6,
+    USER8:7,
+    FACTORY1:8,
+    FACTORY2:9,
+    FACTORY3:10,
+    FACTORY4:11,
+    FACTORY5:12,
+    FACTORY6:13,
+    FACTORY7:14,
+    FACTORY8:15
+}
+
 var SideButton =
 {
    UP:114,

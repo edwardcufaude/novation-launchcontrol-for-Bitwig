@@ -35,36 +35,67 @@ canScrollUp = false;
 canScrollDown = false;
 mixerAlignedGrid = false;
 
+currentScene = Scenes.FACTORY1;
+
+isPlaying = false;
+isRecording = false;
+isWritingArrangerAutomation = false;
+isLoopActive = false;
+isClickActive = false;
+
+muted = []
+armed = []
+
 function init()
 {
 	// Setup MIDI in stuff
    host.getMidiInPort(0).setMidiCallback(onMidi);
+   host.getMidiInPort(0).setSysexCallback(onSysex);
+
    noteInput = host.getMidiInPort(0).createNoteInput("Launch Control", "80????", "90????");
    noteInput.setShouldConsumeEvents(false);
    
 	// create a transport section for on Factory Preset 1
 	transport = host.createTransportSection();
-   sendMidi( FactoryPagePads.Page1, 9, Colour.YELLOW_LOW );
+   sendMidi( FactoryPagePads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
 
    transport.addIsPlayingObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, 10,  on ? Colour.LIME : Colour.GREEN_LOW );
+        sendMidi( FactoryPagePads.Page1, Pads.PAD2,  on ? Colour.LIME : Colour.GREEN_LOW );
+        isPlaying = on;
    });
    transport.addIsRecordingObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, 11,  on ? Colour.RED_FULL : Colour.RED_LOW );
+        sendMidi( FactoryPagePads.Page1, Pads.PAD3,  on ? Colour.RED_FULL : Colour.RED_LOW );
+        isRecording = on;
    });
    transport.addIsWritingArrangerAutomationObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, 12,  on ? Colour.RED_FULL : Colour.OFF );
+        sendMidi( FactoryPagePads.Page1, Pads.PAD4,  on ? Colour.RED_FULL : Colour.OFF );
+        isWritingArrangerAutomation = on;
    });
 
    transport.addIsLoopActiveObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, 25,  on ? Colour.ORANGE : Colour.OFF );
+        sendMidi( FactoryPagePads.Page1, Pads.PAD5,  on ? Colour.ORANGE : Colour.OFF );
+        isLoopActive = on;
    });
    transport.addClickObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, 26,  on ? Colour.ORANGE : Colour.OFF );
+        sendMidi( FactoryPagePads.Page1, Pads.PAD6,  on ? Colour.ORANGE : Colour.OFF );
+        isClickActive = on;
    });
 
 	// create a trackbank (arguments are tracks, sends, scenes)
 	trackBank = host.createTrackBankSection(NUM_TRACKS, NUM_SENDS, NUM_SCENES);
+    for ( var i=0; i<8; i++ ) {
+        var track = trackBank.getTrack( i )
+
+        track.getMute().addValueObserver(makeIndexedFunction(i, function(col, on) {
+            muted[ col ] = on;
+            sendMidi( FactoryPagePads.Page3, PadIndex[col], on ? Colour.ORANGE : Colour.YELLOW_LOW  );
+            
+        }));
+        track.getArm().addValueObserver(makeIndexedFunction(i, function(col, on) {
+            armed[ col ] = on;
+            sendMidi( FactoryPagePads.Page2, PadIndex[col], on ? Colour.RED_FULL : Colour.LIME );
+        }));
+    }
 
 	// create a cursor device to move about using the arrows
    cursorTrack = host.createCursorTrackSection(0, 8);
@@ -76,34 +107,28 @@ function init()
    // Make CCs 21-48 freely mappable for all 16 Channels
    userControls = host.createUserControlsSection((HIGHEST_CC - LOWEST_CC + 1)*16);
 
-   for(var i=LOWEST_CC; i<=HIGHEST_CC; i++)
-   {
-			for (var j=1; j<=16; j++) {
-
-				 // Create the index variable c
-				 var c = i - LOWEST_CC + (j-1) * (HIGHEST_CC-LOWEST_CC+1);
-				 // Set a label/name for each userControl
-				 userControls.getControl(c).setLabel("CC " + i + " - Channel " + j);
-			}
+   for(var i=LOWEST_CC; i<=HIGHEST_CC; i++) {
+       for (var j=1; j<=16; j++) { 
+           // Create the index variable c
+           var c = i - LOWEST_CC + (j-1) * (HIGHEST_CC-LOWEST_CC+1);
+           // Set a label/name for each userControl
+           userControls.getControl(c).setLabel("CC " + i + " - Channel " + j);
+       }
    }
    
-   trackBank.addCanScrollTracksUpObserver(function(canScroll)
-   {
+   trackBank.addCanScrollTracksUpObserver(function(canScroll) {
       canScrollTracksUp = canScroll;
    });
 
-   trackBank.addCanScrollTracksDownObserver(function(canScroll)
-   {
+   trackBank.addCanScrollTracksDownObserver(function(canScroll) {
       canScrollTracksDown = canScroll;
    });
 
-   cursorDevice.addCanSelectNextObserver(function(canScroll)
-   {
+   cursorDevice.addCanSelectNextObserver(function(canScroll) {
       canScrollScenesUp = canScroll;
    });
 
-   cursorDevice.addCanSelectPreviousObserver(function(canScroll)
-   {
+   cursorDevice.addCanSelectPreviousObserver(function(canScroll) {
      canScrollScenesDown = canScroll;
    });
 
@@ -112,15 +137,40 @@ function init()
 }
 
 // This updates the indicators (rainbow things) 
-function updateIndications()
-{
-   for(var i=0; i<8; i++)
-   {
-      primaryDevice.getParameter(i).setIndication(incontrol_knobs);
-      userControls.getControl(i).setIndication(!incontrol_knobs);
-      primaryDevice.getMacro(i).getAmount().setIndication(incontrol_mix);
-      trackBank.getTrack(i).getVolume().setIndication(!incontrol_mix);
+function updateIndications() {
+   for(var i=0; i<8; i++) {
+      trackBank.getTrack(i).getVolume().setIndication( currentScene == Scenes.FACTORY1 ) 
+      trackBank.getTrack(i).getPan().setIndication( currentScene == Scenes.FACTORY1 ) 
+
+      primaryDevice.getParameter(i).setIndication( currentScene == Scenes.FACTORY2 )
+      primaryDevice.getMacro(i).getAmount().setIndication( currentScene == Scenes.FACTORY2 )
+
+      trackBank.getTrack(i).getSend(0).setIndication( currentScene == Scenes.FACTORY3 ) 
+      trackBank.getTrack(i).getSend(1).setIndication( currentScene == Scenes.FACTORY3 ) 
+
+      var isUserControl = (currentScene != Scenes.FACTORY1 && currentScene != Scenes.FACTORY2 && currentScene !=Scenes.FACTORY3)
+      userControls.getControl(i).setIndication( isUserControl );
    }
+
+   if ( currentScene == Scenes.FACTORY1 ) {
+       sendMidi( FactoryPagePads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
+       sendMidi( FactoryPagePads.Page1, Pads.PAD2, isPlaying ? Colour.LIME : Colour.GREEN_LOW );
+       sendMidi( FactoryPagePads.Page1, Pads.PAD3, isRecording ? Colour.RED_FULL : Colour.RED_LOW );
+       sendMidi( FactoryPagePads.Page1, Pads.PAD4, isWritingArrangerAutomation ? Colour.RED_FULL : Colour.OFF );
+       sendMidi( FactoryPagePads.Page1, Pads.PAD5, isLoopActive ? Colour.ORANGE : Colour.OFF );
+       sendMidi( FactoryPagePads.Page1, Pads.PAD6, isClickActive ? Colour.ORANGE : Colour.OFF );
+  } else if ( currentScene == Scenes.FACTORY2 ) {
+        for ( var i=0; i<8; i++) {
+            sendMidi( FactoryPagePads.Page2, PadIndex[i], armed[ i ]  ?  Colour.RED_FULL : Colour.LIME  );
+            
+        }
+  } else if ( currentScene == Scenes.FACTORY3 ) {
+        for ( var i=0; i<8; i++) {
+            sendMidi( FactoryPagePads.Page3, PadIndex[i], muted[ i ]  ?  Colour.ORANGE : Colour.YELLOW_LOW  );
+        }
+  }
+
+
 }
 
 var incontrol_mix = true;
@@ -131,7 +181,7 @@ function onMidi(status, data1, data2)
 {
 	
 	printMidi(status, data1, data2);
-	println(MIDIChannel(status));
+	//println(MIDIChannel(status));
 	
 	// make Pads green when pressed
 	if(status < 71 || status > 75) {
@@ -146,63 +196,39 @@ function onMidi(status, data1, data2)
 		//sendMidi(status, 0x + data1, Colour.OFF);	
 	}
 	
-	if (status == FactoryPagePads.Page1 && data2 == 127)
-    {
-      // Factory Preset 1 = Transport Controls and Parameter selector
-      if (data1 == 9)
-      {
-	  	transport.stop();
-      }
-      else if (data1 == 10)
-      {
-        transport.play();			     
-      }
-      else if (data1 == 11)
-      {
-        transport.record(); 
-      }
-      else if (data1 == 12)
-      {
-		transport.toggleWriteArrangerAutomation();
-      }
-      else if (data1 == 25)
-      {
-		transport.toggleLoop();
-      }
-      else if (data1 == 26)
-      {
-		transport.toggleClick(); 
-      }
-	  else if (data1 == 27)
-      {
-         primaryDevice.previousParameterPage();
-		 updateIndications();
-      }
-	  else if (data1 == 28)
-      {
-         primaryDevice.nextParameterPage();
-		 updateIndications();
-      }
+	if (status == FactoryPagePads.Page1 && data2 == 127) {
+        // Factory Preset 1 = Transport Controls and Parameter selector
+        handleFactory1Pads( data1 )
+    } else if (status == FactoryPagePads.Page2 && data2 == 127) {
+        handleFactory2Pads( data1 )
+    } else if (status == FactoryPagePads.Page3 && data2 == 127) {
+        handleFactory3Pads( data1 )
     }
-	 // Factory Preset 1 = Setup knobs to control Macros and Parameters
-	if (status == FactoryPageKnobs.Page1){
-		if (data1 >= 21 && data1 <= 28)
-		{
-			var knobIndexTop = data1 - 21;
-			primaryDevice.getParameter(knobIndexTop).set(data2, 128);
-		}
-		else if (data1 >= 41 && data1 <= 48)
-		{
-			var knobIndexBottom = data1 - 41;
-			primaryDevice.getMacro(knobIndexBottom).getAmount().set(data2, 128);
-		}
-	}
-	// If not on a Factory Bank already assigned then make the knobs assignable and assign those arrows on the right of the control to move around the tracks and devices on the screen
-	if (isChannelController(status))
-	{
-		if (data2 == 127)
 
-		{
+	if (status == FactoryPageKnobs.Page1 && isTopRow( data1 )){
+		trackBank.getTrack( knobIndex( data1 )).getVolume().set(data2, 128);
+
+	} else if ( status == FactoryPageKnobs.Page1 && isBottomRow( data1 )) {
+		trackBank.getTrack( knobIndex( data1 )).getPan().set(data2, 128);
+
+	} else if (status == FactoryPageKnobs.Page2 && isTopRow( data1 )){
+	    primaryDevice.getParameter( knobIndex( data1 )).set(data2, 128);
+
+     } else if (status == FactoryPageKnobs.Page2 && isBottomRow( data1 )){
+	    primaryDevice.getMacro( knobIndex( data1 )).getAmount().set(data2, 128);
+
+
+	} else if (status == FactoryPageKnobs.Page3 && isTopRow( data1 )){
+		trackBank.getTrack( knobIndex( data1 )).getSend(0).set(data2, 128);
+
+	} else if ( status == FactoryPageKnobs.Page3 && isBottomRow( data1 )) {
+		trackBank.getTrack( knobIndex( data1 )).getSend(1).set(data2, 128);
+
+    } else 
+
+	// If not on a Factory Bank already assigned then make the knobs assignable and assign those arrows on the right of the control to move around the tracks and devices on the screen
+	if (isChannelController(status)) {
+		if (data2 == 127) {
 			if (data1 == SideButton.UP)
 			{
 				if (incontrol_mix)
@@ -261,23 +287,32 @@ function onMidi(status, data1, data2)
    updateOutputState();
 }
 
+function isTopRow( knob ) {
+    return knob >= 21 && knob <= 28;
+}
+
+function isBottomRow( knob ) {
+    return knob >= 41 && knob <= 48;
+}
+
+function knobIndex( knob ) {
+    return knob -( isTopRow( knob ) ? 21 : 41 );
+}
+
 //Works
-function exit()
-{
+function exit() {
    sendMidi(0xB8, 0x00, 0x00);
 }
 
-function updateScrollButtons()
-{
+function updateScrollButtons() {
    setSideLED(0, canScrollUp ? Colour.RED_FULL : Colour.RED_FULL);
    setSideLED(1, canScrollDown ? Colour.RED_FULL : Colour.OFF);
    setSideLED(2, canScrollLeft ? Colour.RED_FULL : Colour.OFF);
    setSideLED(3, canScrollRight ? Colour.RED_FULL : Colour.OFF);
-};
+}
 
-function setSideLED(index, colour)
-{
-   sendMidi(0xb8, (72 + index), colour);
+function setSideLED(index, colour) {
+  sendMidi(0xb8, (72 + index), colour);
 }
 
 function updateOutputState()
@@ -291,3 +326,73 @@ function updateOutputState()
 
    updateScrollButtons();
 };
+
+function handleFactory1Pads( pad ) {
+      switch( pad ) {
+        case Pads.PAD1:
+	  	    transport.stop();
+            break;
+        case Pads.PAD2: 
+            transport.play();			     
+            break;
+        case Pads.PAD3: 
+            transport.record(); 
+            break;
+        case Pads.PAD4:
+            transport.toggleWriteArrangerAutomation();
+            break;
+        case Pads.PAD5:
+		    transport.toggleLoop();
+            break;
+        case Pads.PAD6:
+		    transport.toggleClick(); 
+            break;  
+        case Pads.PAD7:
+            primaryDevice.previousParameterPage();
+		    updateIndications();
+            break;
+        case Pads.PAD8:
+            primaryDevice.nextParameterPage();
+		    updateIndications();
+            break;
+      }
+}
+
+function handleFactory2Pads( pad ) {
+      var idx = PadIndex.indexOf( pad )
+      var track = trackBank.getTrack( idx )
+      var old = armed[idx]
+      track.getArm().toggle();
+      if ( !old ) {
+        track.selectInMixer()
+      }
+
+}
+
+function handleFactory3Pads( pad ) {
+      var idx = PadIndex.indexOf( pad )
+      trackBank.getTrack( idx ).getMute().toggle();
+}
+
+function onSysex(data) {
+    if ( data.substring(0,14) == 'f0002029020a77' ) {
+        currentScene = parseInt( data.substring(14,16), 16)     
+       
+        if ( currentScene == Scenes.FACTORY2 ) {
+           mixerAlignedGrid = false;
+           incontrol_mix = true;           
+        }
+        
+        if ( currentScene == Scenes.FACTORY1 || currentScene == Scenes.FACTORY3 ) {
+            mixerAlignedGrid = true;
+            incontrol_mix = false;
+        }
+        updateIndications();
+    }
+}
+
+function makeIndexedFunction(index, f) {
+    return function(value) {
+        f(index, value);
+    };
+}

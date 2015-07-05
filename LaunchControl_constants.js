@@ -3,7 +3,7 @@ var HIGHEST_CC = 48;
 
 var NUM_TRACKS = 8;
 var NUM_SENDS = 2;
-var NUM_SCENES = 1;
+var NUM_SCENES = 8;
 
 var Pads = {
     PAD1:9,

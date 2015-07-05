@@ -42,7 +42,11 @@ isRecording = false;
 isWritingArrangerAutomation = false;
 isLoopActive = false;
 isClickActive = false;
+isOverdubActive = false;
+isLauncherOverdubActive = false;
 
+var hasContent = initArray(0, 64)
+selectedChannel = 0
 muted = []
 armed = []
 
@@ -80,6 +84,16 @@ function init()
         sendMidi( FactoryPagePads.Page1, Pads.PAD6,  on ? Colour.ORANGE : Colour.OFF );
         isClickActive = on;
    });
+   transport.addLauncherOverdubObserver(function(on) {
+        sendMidi( FactoryPagePads.Page1, Pads.PAD7,  on ? Colour.RED_FULL : Colour.OFF );
+        isLauncherOverdubActive = on;
+   });
+
+   transport.addOverdubObserver(function(on) {
+        sendMidi( FactoryPagePads.Page1, Pads.PAD8,  on ? Colour.ORANGE : Colour.OFF );
+        isOverdubActive = on;
+   });
+
 
 	// create a trackbank (arguments are tracks, sends, scenes)
 	trackBank = host.createTrackBankSection(NUM_TRACKS, NUM_SENDS, NUM_SCENES);
@@ -88,12 +102,21 @@ function init()
 
         track.getMute().addValueObserver(makeIndexedFunction(i, function(col, on) {
             muted[ col ] = on;
-            sendMidi( FactoryPagePads.Page3, PadIndex[col], on ? Colour.ORANGE : Colour.YELLOW_LOW  );
+            sendMidi( FactoryPagePads.Page2, PadIndex[col], on ? Colour.ORANGE : Colour.YELLOW_LOW  );
             
         }));
         track.getArm().addValueObserver(makeIndexedFunction(i, function(col, on) {
             armed[ col ] = on;
-            sendMidi( FactoryPagePads.Page2, PadIndex[col], on ? Colour.RED_FULL : Colour.LIME );
+            sendMidi( FactoryPagePads.Page3, PadIndex[col], on ? Colour.RED_FULL : Colour.LIME );
+        }));
+        track.addIsSelectedInMixerObserver( makeIndexedFunction(i, function( col, on ) { 
+            if ( on ) {
+                selectedChannel = col;
+            }
+        }));
+        var clipLauncher = track.getClipLauncher();
+        clipLauncher.addHasContentObserver( makeSlotIndexedFunction(i, function( track, slot, on ) {
+            hasContent[ track * 8 + slot ] = on;     
         }));
     }
 
@@ -142,11 +165,11 @@ function updateIndications() {
       trackBank.getTrack(i).getVolume().setIndication( currentScene == Scenes.FACTORY1 ) 
       trackBank.getTrack(i).getPan().setIndication( currentScene == Scenes.FACTORY1 ) 
 
-      primaryDevice.getParameter(i).setIndication( currentScene == Scenes.FACTORY2 )
-      primaryDevice.getMacro(i).getAmount().setIndication( currentScene == Scenes.FACTORY2 )
+      trackBank.getTrack(i).getSend(0).setIndication( currentScene == Scenes.FACTORY2 ) 
+      trackBank.getTrack(i).getSend(1).setIndication( currentScene == Scenes.FACTORY2 ) 
 
-      trackBank.getTrack(i).getSend(0).setIndication( currentScene == Scenes.FACTORY3 ) 
-      trackBank.getTrack(i).getSend(1).setIndication( currentScene == Scenes.FACTORY3 ) 
+      primaryDevice.getParameter(i).setIndication( currentScene == Scenes.FACTORY3 )
+      primaryDevice.getMacro(i).getAmount().setIndication( currentScene == Scenes.FACTORY3 )
 
       var isUserControl = (currentScene != Scenes.FACTORY1 && currentScene != Scenes.FACTORY2 && currentScene !=Scenes.FACTORY3)
       userControls.getControl(i).setIndication( isUserControl );
@@ -159,16 +182,24 @@ function updateIndications() {
        sendMidi( FactoryPagePads.Page1, Pads.PAD4, isWritingArrangerAutomation ? Colour.RED_FULL : Colour.OFF );
        sendMidi( FactoryPagePads.Page1, Pads.PAD5, isLoopActive ? Colour.ORANGE : Colour.OFF );
        sendMidi( FactoryPagePads.Page1, Pads.PAD6, isClickActive ? Colour.ORANGE : Colour.OFF );
+       sendMidi( FactoryPagePads.Page1, Pads.PAD7, isLauncherOverdubActive ? Colour.RED_FULL : Colour.OFF );
+       sendMidi( FactoryPagePads.Page1, Pads.PAD8, isOverdubActive ? Colour.ORANGE : Colour.OFF );
+
   } else if ( currentScene == Scenes.FACTORY2 ) {
         for ( var i=0; i<8; i++) {
-            sendMidi( FactoryPagePads.Page2, PadIndex[i], armed[ i ]  ?  Colour.RED_FULL : Colour.LIME  );
-            
+            sendMidi( FactoryPagePads.Page2, PadIndex[i], muted[ i ]  ?  Colour.ORANGE : Colour.YELLOW_LOW  );
         }
+ 
   } else if ( currentScene == Scenes.FACTORY3 ) {
         for ( var i=0; i<8; i++) {
-            sendMidi( FactoryPagePads.Page3, PadIndex[i], muted[ i ]  ?  Colour.ORANGE : Colour.YELLOW_LOW  );
+            sendMidi( FactoryPagePads.Page3, PadIndex[i], armed[ i ]  ?  Colour.RED_FULL : Colour.LIME  );
+            
         }
-  }
+  } else if ( currentScene == Scenes.FACTORY4 ) {
+        for ( var i=0; i<8; i++) {
+            sendMidi( FactoryPagePads.Page4, PadIndex[i], Colour.RED_LOW );
+        }
+ }
 
 
 }
@@ -180,7 +211,7 @@ var incontrol_pads = true;
 function onMidi(status, data1, data2)
 {
 	
-	printMidi(status, data1, data2);
+	//printMidi(status, data1, data2);
 	//println(MIDIChannel(status));
 	
 	// make Pads green when pressed
@@ -203,6 +234,9 @@ function onMidi(status, data1, data2)
         handleFactory2Pads( data1 )
     } else if (status == FactoryPagePads.Page3 && data2 == 127) {
         handleFactory3Pads( data1 )
+    } else if (status == FactoryPagePads.Page4 && data2 == 127) {
+        handleFactory4Pads( data1 )
+
     }
 
 	if (status == FactoryPageKnobs.Page1 && isTopRow( data1 )){
@@ -212,37 +246,50 @@ function onMidi(status, data1, data2)
 		trackBank.getTrack( knobIndex( data1 )).getPan().set(data2, 128);
 
 	} else if (status == FactoryPageKnobs.Page2 && isTopRow( data1 )){
-	    primaryDevice.getParameter( knobIndex( data1 )).set(data2, 128);
-
-     } else if (status == FactoryPageKnobs.Page2 && isBottomRow( data1 )){
-	    primaryDevice.getMacro( knobIndex( data1 )).getAmount().set(data2, 128);
-
-	} else if (status == FactoryPageKnobs.Page3 && isTopRow( data1 )){
 		trackBank.getTrack( knobIndex( data1 )).getSend(0).set(data2, 128);
 
-	} else if ( status == FactoryPageKnobs.Page3 && isBottomRow( data1 )) {
+	} else if ( status == FactoryPageKnobs.Page2 && isBottomRow( data1 )) {
 		trackBank.getTrack( knobIndex( data1 )).getSend(1).set(data2, 128);
 
+	} else if (status == FactoryPageKnobs.Page3 && isTopRow( data1 )){
+        var idx = knobIndex( data1 )
+        if ( idx < 4 ) {
+	        primaryDevice.getMacro( idx ).getAmount().set(data2, 128);
+        } else {
+	        primaryDevice.getParameter( idx-4 ).set(data2, 128);
+        }
+
+     } else if (status == FactoryPageKnobs.Page3 && isBottomRow( data1 )){
+        var idx = knobIndex( data1 )
+        if ( idx < 4 ) {
+	        primaryDevice.getMacro( idx+4 ).getAmount().set(data2, 128);
+        } else {
+	        primaryDevice.getParameter( idx ).set(data2, 128);
+        }
     } else 
 
 	// If not on a Factory Bank already assigned then make the knobs assignable and assign those arrows on the right of the control to move around the tracks and devices on the screen
 	if (isChannelController(status)) {
 		if (data2 == 127) {
-            if (incontrol_mix) {
+            if (!incontrol_mix) {
                 switch( data1 ) {
                     case SideButton.UP:
-                        cursorTrack.selectPrevious();
+                        primaryDevice.previousParameterPage();
+		                updateIndications();
                         break;
                     case SideButton.DOWN:
-                        cursorTrack.selectNext();
+                        primaryDevice.nextParameterPage();
+		                updateIndications();
                         break;
                     case SideButton.LEFT:
                         cursorDevice.selectPrevious();
                         primaryDevice.switchToDevice( DeviceType.ANY, ChainLocation.PREVIOUS);
-                        break;
+                        updateIndications();
+                            break;
                     case SideButton.RIGHT:
                         cursorDevice.selectNext();
-                        primaryDevice.swtichToDevice( DeviceType.ANY, ChainLocation.NEXT);
+                        primaryDevice.switchToDevice( DeviceType.ANY, ChainLocation.NEXT);
+                        updateIndications();
                         break;
                 }
                     
@@ -264,8 +311,7 @@ function onMidi(status, data1, data2)
 			}
 		}
 		// Make rest of the knobs not in the Factory bank freely assignable
-		else if (data1 >= LOWEST_CC && data1 <= HIGHEST_CC)
-		{
+		else if (data1 >= LOWEST_CC && data1 <= HIGHEST_CC) {
 			var index = data1 - LOWEST_CC + (HIGHEST_CC * MIDIChannel(status));
 			userControls.getControl(index).set(data2, 128);
 		}
@@ -335,17 +381,22 @@ function handleFactory1Pads( pad ) {
 		    transport.toggleClick(); 
             break;  
         case Pads.PAD7:
-            primaryDevice.previousParameterPage();
-		    updateIndications();
+            transport.toggleLauncherOverdub();
             break;
         case Pads.PAD8:
-            primaryDevice.nextParameterPage();
-		    updateIndications();
+            transport.toggleOverdub();
             break;
       }
 }
 
+
 function handleFactory2Pads( pad ) {
+      var idx = PadIndex.indexOf( pad )
+      trackBank.getTrack( idx ).getMute().toggle();
+}
+
+
+function handleFactory3Pads( pad ) {
       var idx = PadIndex.indexOf( pad )
       var track = trackBank.getTrack( idx )
       var old = armed[idx]
@@ -353,26 +404,36 @@ function handleFactory2Pads( pad ) {
       if ( !old ) {
         track.selectInMixer()
       }
-
 }
 
-function handleFactory3Pads( pad ) {
-      var idx = PadIndex.indexOf( pad )
-      trackBank.getTrack( idx ).getMute().toggle();
+function handleFactory4Pads( pad ) {
+    for ( var i=0; i<8; i++) {
+        if ( !hasContent[ selectedChannel * 8 + i ] ) {
+            emptySlot = i;
+            break;
+        }
+    }    
+    println( emptySlot )
+    if ( emptySlot == -1 ) {
+        return
+    } else {
+       var idx = PadIndex.indexOf( pad );
+       trackBank.getTrack( selectedChannel ).getClipLauncherSlots().createEmptyClip( emptySlot, (idx+1) * 4 );
+    }
 }
 
 function onSysex(data) {
     if ( data.substring(0,14) == 'f0002029020a77' ) {
         currentScene = parseInt( data.substring(14,16), 16)     
        
-        if ( currentScene == Scenes.FACTORY2 ) {
+        if ( currentScene == Scenes.FACTORY3 ) {
            mixerAlignedGrid = false;
-           incontrol_mix = true;           
+           incontrol_mix = false;           
         }
         
-        if ( currentScene == Scenes.FACTORY1 || currentScene == Scenes.FACTORY3 ) {
+        if ( currentScene == Scenes.FACTORY1 || currentScene == Scenes.FACTORY2 || currentScene == Scenes.FACTORY4) {
             mixerAlignedGrid = true;
-            incontrol_mix = false;
+            incontrol_mix = true;
         }
         updateIndications();
     }
@@ -382,4 +443,10 @@ function makeIndexedFunction(index, f) {
     return function(value) {
         f(index, value);
     };
+}
+
+function makeSlotIndexedFunction( track, f) {
+    return function( s, v) {
+        f(track, s, v)
+    }
 }

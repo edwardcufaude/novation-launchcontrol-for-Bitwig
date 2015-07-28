@@ -20,10 +20,18 @@ loadAPI(1);
 host.defineController("Novation", "Launch Control", "1.0", "05e2b820-177e-11e4-8c21-0800200c9a66");
 host.defineMidiPorts(1, 1);
 host.addDeviceNameBasedDiscoveryPair(["Launch Control"], ["Launch Control"]);
+host.addDeviceNameBasedDiscoveryPair(["Launch Control MIDI 1"], ["Launch Control MIDI 1"]);
+
+
 
 //Load LaunchControl constants containing the status for pages and other constant variables
 load("LaunchControl_constants.js");
 load("LaunchControl_common.js");
+
+
+var FPads = FactoryPagePads;
+var FKnobs = FactoryPageKnobs;
+var invertFactory = "no";
 
 canScrollTracksUp = false;
 canScrollTracksDown = false;
@@ -56,41 +64,57 @@ function init()
    host.getMidiInPort(0).setMidiCallback(onMidi);
    host.getMidiInPort(0).setSysexCallback(onSysex);
 
+   var es = host.getPreferences().getEnumSetting( "Invert", "GUI", ["yes", "no"], "no" );
+   es.addValueObserver(
+      function(val) {
+        println( "PREF CHANGE " + val );        
+        invertFactory = val;
+        if ( val == "yes" ) {
+            FPads = FactoryPagePadsInverted;
+            FKnobs = FactoryPageKnobsInverted;
+        } else {
+            FPads = FactoryPagePads;
+            FKnobs = FactoryPageKnobs;
+        }
+
+      }
+   );
+
    noteInput = host.getMidiInPort(0).createNoteInput("Launch Control", "80????", "90????");
    noteInput.setShouldConsumeEvents(false);
    
 	// create a transport section for on Factory Preset 1
 	transport = host.createTransportSection();
-   sendMidi( FactoryPagePads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
+   sendMidi( FPads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
 
    transport.addIsPlayingObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, Pads.PAD2,  on ? Colour.LIME : Colour.GREEN_LOW );
+        sendMidi( FPads.Page1, Pads.PAD2,  on ? Colour.LIME : Colour.GREEN_LOW );
         isPlaying = on;
    });
    transport.addIsRecordingObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, Pads.PAD3,  on ? Colour.RED_FULL : Colour.RED_LOW );
+        sendMidi( FPads.Page1, Pads.PAD3,  on ? Colour.RED_FULL : Colour.RED_LOW );
         isRecording = on;
    });
    transport.addIsWritingArrangerAutomationObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, Pads.PAD4,  on ? Colour.RED_FULL : Colour.OFF );
+        sendMidi( FPads.Page1, Pads.PAD4,  on ? Colour.RED_FULL : Colour.OFF );
         isWritingArrangerAutomation = on;
    });
 
    transport.addIsLoopActiveObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, Pads.PAD5,  on ? Colour.ORANGE : Colour.OFF );
+        sendMidi( FPads.Page1, Pads.PAD5,  on ? Colour.ORANGE : Colour.OFF );
         isLoopActive = on;
    });
    transport.addClickObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, Pads.PAD6,  on ? Colour.ORANGE : Colour.OFF );
+        sendMidi( FPads.Page1, Pads.PAD6,  on ? Colour.ORANGE : Colour.OFF );
         isClickActive = on;
    });
    transport.addLauncherOverdubObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, Pads.PAD7,  on ? Colour.RED_FULL : Colour.OFF );
+        sendMidi( FPads.Page1, Pads.PAD7,  on ? Colour.RED_FULL : Colour.OFF );
         isLauncherOverdubActive = on;
    });
 
    transport.addOverdubObserver(function(on) {
-        sendMidi( FactoryPagePads.Page1, Pads.PAD8,  on ? Colour.ORANGE : Colour.OFF );
+        sendMidi( FPads.Page1, Pads.PAD8,  on ? Colour.ORANGE : Colour.OFF );
         isOverdubActive = on;
    });
 
@@ -102,12 +126,12 @@ function init()
 
         track.getMute().addValueObserver(makeIndexedFunction(i, function(col, on) {
             muted[ col ] = on;
-            sendMidi( FactoryPagePads.Page2, PadIndex[col], on ? Colour.ORANGE : Colour.YELLOW_LOW  );
+            sendMidi( FPads.Page2, PadIndex[col], on ? Colour.ORANGE : Colour.YELLOW_LOW  );
             
         }));
         track.getArm().addValueObserver(makeIndexedFunction(i, function(col, on) {
             armed[ col ] = on;
-            sendMidi( FactoryPagePads.Page3, PadIndex[col], on ? Colour.RED_FULL : Colour.LIME );
+            sendMidi( FPads.Page3, PadIndex[col], on ? Colour.RED_FULL : Colour.LIME );
         }));
         track.addIsSelectedInMixerObserver( makeIndexedFunction(i, function( col, on ) { 
             if ( on ) {
@@ -176,28 +200,28 @@ function updateIndications() {
    }
 
    if ( currentScene == Scenes.FACTORY1 ) {
-       sendMidi( FactoryPagePads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
-       sendMidi( FactoryPagePads.Page1, Pads.PAD2, isPlaying ? Colour.LIME : Colour.GREEN_LOW );
-       sendMidi( FactoryPagePads.Page1, Pads.PAD3, isRecording ? Colour.RED_FULL : Colour.RED_LOW );
-       sendMidi( FactoryPagePads.Page1, Pads.PAD4, isWritingArrangerAutomation ? Colour.RED_FULL : Colour.OFF );
-       sendMidi( FactoryPagePads.Page1, Pads.PAD5, isLoopActive ? Colour.ORANGE : Colour.OFF );
-       sendMidi( FactoryPagePads.Page1, Pads.PAD6, isClickActive ? Colour.ORANGE : Colour.OFF );
-       sendMidi( FactoryPagePads.Page1, Pads.PAD7, isLauncherOverdubActive ? Colour.RED_FULL : Colour.OFF );
-       sendMidi( FactoryPagePads.Page1, Pads.PAD8, isOverdubActive ? Colour.ORANGE : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
+       sendMidi( FPads.Page1, Pads.PAD2, isPlaying ? Colour.LIME : Colour.GREEN_LOW );
+       sendMidi( FPads.Page1, Pads.PAD3, isRecording ? Colour.RED_FULL : Colour.RED_LOW );
+       sendMidi( FPads.Page1, Pads.PAD4, isWritingArrangerAutomation ? Colour.RED_FULL : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD5, isLoopActive ? Colour.ORANGE : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD6, isClickActive ? Colour.ORANGE : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD7, isLauncherOverdubActive ? Colour.RED_FULL : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD8, isOverdubActive ? Colour.ORANGE : Colour.OFF );
 
   } else if ( currentScene == Scenes.FACTORY2 ) {
         for ( var i=0; i<8; i++) {
-            sendMidi( FactoryPagePads.Page2, PadIndex[i], muted[ i ]  ?  Colour.ORANGE : Colour.YELLOW_LOW  );
+            sendMidi( FPads.Page2, PadIndex[i], muted[ i ]  ?  Colour.ORANGE : Colour.YELLOW_LOW  );
         }
  
   } else if ( currentScene == Scenes.FACTORY3 ) {
         for ( var i=0; i<8; i++) {
-            sendMidi( FactoryPagePads.Page3, PadIndex[i], armed[ i ]  ?  Colour.RED_FULL : Colour.LIME  );
+            sendMidi( FPads.Page3, PadIndex[i], armed[ i ]  ?  Colour.RED_FULL : Colour.LIME  );
             
         }
   } else if ( currentScene == Scenes.FACTORY4 ) {
         for ( var i=0; i<8; i++) {
-            sendMidi( FactoryPagePads.Page4, PadIndex[i], Colour.RED_LOW );
+            sendMidi( FPads.Page4, PadIndex[i], Colour.RED_LOW );
         }
  }
 
@@ -227,31 +251,31 @@ function onMidi(status, data1, data2)
 		//sendMidi(status, 0x + data1, Colour.OFF);	
 	}
 	
-	if (status == FactoryPagePads.Page1 && data2 == 127) {
+	if (status == FPads.Page1 && data2 == 127) {
         // Factory Preset 1 = Transport Controls and Parameter selector
         handleFactory1Pads( data1 )
-    } else if (status == FactoryPagePads.Page2 && data2 == 127) {
+    } else if (status == FPads.Page2 && data2 == 127) {
         handleFactory2Pads( data1 )
-    } else if (status == FactoryPagePads.Page3 && data2 == 127) {
+    } else if (status == FPads.Page3 && data2 == 127) {
         handleFactory3Pads( data1 )
-    } else if (status == FactoryPagePads.Page4 && data2 == 127) {
+    } else if (status == FPads.Page4 && data2 == 127) {
         handleFactory4Pads( data1 )
 
     }
 
-	if (status == FactoryPageKnobs.Page1 && isTopRow( data1 )){
+	if (status == FKnobs.Page1 && isTopRow( data1 )){
 		trackBank.getTrack( knobIndex( data1 )).getVolume().set(data2, 128);
 
-	} else if ( status == FactoryPageKnobs.Page1 && isBottomRow( data1 )) {
+	} else if ( status == FKnobs.Page1 && isBottomRow( data1 )) {
 		trackBank.getTrack( knobIndex( data1 )).getPan().set(data2, 128);
 
-	} else if (status == FactoryPageKnobs.Page2 && isTopRow( data1 )){
+	} else if (status == FKnobs.Page2 && isTopRow( data1 )){
 		trackBank.getTrack( knobIndex( data1 )).getSend(0).set(data2, 128);
 
-	} else if ( status == FactoryPageKnobs.Page2 && isBottomRow( data1 )) {
+	} else if ( status == FKnobs.Page2 && isBottomRow( data1 )) {
 		trackBank.getTrack( knobIndex( data1 )).getSend(1).set(data2, 128);
 
-	} else if (status == FactoryPageKnobs.Page3 && isTopRow( data1 )){
+	} else if (status == FKnobs.Page3 && isTopRow( data1 )){
         var idx = knobIndex( data1 )
         if ( idx < 4 ) {
 	        primaryDevice.getMacro( idx ).getAmount().set(data2, 128);
@@ -259,7 +283,7 @@ function onMidi(status, data1, data2)
 	        primaryDevice.getParameter( idx-4 ).set(data2, 128);
         }
 
-     } else if (status == FactoryPageKnobs.Page3 && isBottomRow( data1 )){
+     } else if (status == FKnobs.Page3 && isBottomRow( data1 )){
         var idx = knobIndex( data1 )
         if ( idx < 4 ) {
 	        primaryDevice.getMacro( idx+4 ).getAmount().set(data2, 128);
@@ -425,6 +449,10 @@ function handleFactory4Pads( pad ) {
 function onSysex(data) {
     if ( data.substring(0,14) == 'f0002029020a77' ) {
         currentScene = parseInt( data.substring(14,16), 16)     
+        
+        if ( currentScene >= 8 && invertFactory == "yes" ) {
+            currentScene = 15 - (currentScene -8);
+        }
        
         if ( currentScene == Scenes.FACTORY3 ) {
            mixerAlignedGrid = false;

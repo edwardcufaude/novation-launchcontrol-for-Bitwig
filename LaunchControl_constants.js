@@ -78,6 +78,19 @@ var FactoryPageKnobs =
 	Page8:191
 };
 
+var FactoryPageKnobsInverted = 
+{
+	Page1:191,
+	Page2:190,
+	Page3:189,
+	Page4:188,
+	Page5:187,
+	Page6:186,
+	Page7:185,
+	Page8:184
+};
+
+
 var UserPagePads =
 {
 	Page1:144,
@@ -100,6 +113,18 @@ var FactoryPagePads =
 	Page6:157,
 	Page7:158,
 	Page8:159
+};
+
+var FactoryPagePadsInverted = 
+{
+	Page1:159,
+	Page2:158,
+	Page3:157,
+	Page4:156,
+	Page5:155,
+	Page6:154,
+	Page7:153,
+	Page8:152
 };
 
 var Colour = // Novation are from the UK

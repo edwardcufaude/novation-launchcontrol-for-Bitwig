@@ -1,20 +1,36 @@
+/*
+
+    A Novation LaunchControl script for BitWig-Studio
+
+The User-Pages emmit midi events that can be used to midi-learn the knobs and buttons to in Bitwig
+the script is based on the work of eduk (https://github.com/educk)
+
+The Factory-Pages are mapped to the following functions:
+
+Factory-Page 1: 
+    the top row knobs control volume
+    the lower row knobs controle pan
+    the buttons are mapped to Play, Record, Writing Arranger Automation, Loop, Click, Launcher Overdub, Overdub
+
+Factory-Page 2: 
+    the top row knobs control send1
+    the lower row knobs controle send2
+    the buttons are mapped to mute
+
+Factory-Page 3: 
+    the left 8 knobs are mapped to Macro Functions
+    the right 8 knobs are mapped to Device Parameters
+    the buttons are mapped to record arm 
+
+Factory-Page 3: 
+    the knobs aren't currently mapped
+    the buttons create an empty clip on the next free slot of the selected Track. The button number is the clip lenght in bars
+
+Since selecting the first few factory-pages can be a bit tricky when the launch-control is handled operated with the left hand (at least for me)
+I also added a setting option in the scripts settings dialog that allows to reverse the Page mapping - so page 1 gets page 8, page 2 gets page 7, ...
 
 
-//This is a very basic Launch Control script
-//
-//I'm not terribly great at programming so anyone can take over and help
-// This is what I know
-// The Side Buttons only accept red
-// The status MIDI for the Factory templates come in at status B00 to B15 User templates start at B00 to B07, Factory B08 to B15
-// Colours have been setup in LaunchControl_constants and match Launchpad script
-// data1 for Sidebuttons are 114 to 117, you can use SideButton.UP / DOWN / LEFT / RIGHT
-// Factory preset one has been mapped to Macros on bottom and parameters on top
-// Transport controls for the pads have been setup and next/prev parameter page
-// Rainbow indicators work for both
-// Tried to add light script, can't get it to work, so I just stuck a MIDI out to light them up when pressed.
-// Most code has been copied from Launchpad and Launchey scripts
- 
-
+*/
 loadAPI(1);
 
 host.defineController("Novation", "Launch Control", "1.0", "05e2b820-177e-11e4-8c21-0800200c9a66");

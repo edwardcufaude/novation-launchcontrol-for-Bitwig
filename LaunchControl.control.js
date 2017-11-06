@@ -31,7 +31,7 @@ I also added a setting option in the scripts settings dialog that allows to reve
 
 
 */
-loadAPI(1);
+loadAPI(4);
 
 host.defineController("Novation", "Launch Control", "1.0", "05e2b820-177e-11e4-8c21-0800200c9a66");
 host.defineMidiPorts(1, 1);
@@ -167,7 +167,11 @@ function init()
    cursorDevice = host.createCursorDevice();
    masterTrack = host.createMasterTrackSection(0);
    primaryDevice = cursorTrack.getPrimaryDevice();
-   
+   remoteControls = primaryDevice.createCursorRemoteControlsPage(8);
+   cursorRemoteControls = primaryDevice.createCursorRemoteControlsPage("right", 8, "");
+   cursorRemoteControls.getName().addValueObserver( function(name) {
+        host.showPopupNotification( name );
+   })
    // Make CCs 21-48 freely mappable for all 16 Channels
    userControls = host.createUserControlsSection((HIGHEST_CC - LOWEST_CC + 1)*16);
 
@@ -209,9 +213,6 @@ function updateIndications() {
       trackBank.getTrack(i).getSend(0).setIndication( currentScene == Scenes.FACTORY2 ) 
       trackBank.getTrack(i).getSend(1).setIndication( currentScene == Scenes.FACTORY2 ) 
 
-      primaryDevice.getParameter(i).setIndication( currentScene == Scenes.FACTORY3 )
-      primaryDevice.getMacro(i).getAmount().setIndication( currentScene == Scenes.FACTORY3 )
-
       var isUserControl = (currentScene != Scenes.FACTORY1 && currentScene != Scenes.FACTORY2 && currentScene !=Scenes.FACTORY3)
       userControls.getControl(i).setIndication( isUserControl );
    }
@@ -249,9 +250,7 @@ var incontrol_mix = true;
 var incontrol_knobs = true;
 var incontrol_pads = true;
 
-function onMidi(status, data1, data2)
-{
-    println( 'MIDI!')	
+function onMidi(status, data1, data2) {
 //	printMidi(status, data1, data2);
 //	println(MIDIChannel(status));
 	
@@ -295,61 +294,35 @@ function onMidi(status, data1, data2)
 	} else if (status == FKnobs.Page3 && isTopRow( data1 )){
         var idx = knobIndex( data1 )
         if ( idx < 4 ) {
-	        primaryDevice.getMacro( idx ).getAmount().set(data2, 128);
+	        remoteControls.getParameter( idx ).value().set(data2, 128);
         } else {
-	        primaryDevice.getParameter( idx-4 ).set(data2, 128);
+	        cursorRemoteControls.getParameter( idx-4 ).value().set(data2, 128);
         }
 
      } else if (status == FKnobs.Page3 && isBottomRow( data1 )){
         var idx = knobIndex( data1 )
         if ( idx < 4 ) {
-	        primaryDevice.getMacro( idx+4 ).getAmount().set(data2, 128);
+	        remoteControls.getParameter( idx+4 ).value().set(data2, 128);
         } else {
-	        primaryDevice.getParameter( idx ).set(data2, 128);
+	        cursorRemoteControls.getParameter( idx ).value().set(data2, 128);
         }
     } else 
 
 	// If not on a Factory Bank already assigned then make the knobs assignable and assign those arrows on the right of the control to move around the tracks and devices on the screen
 	if (isChannelController(status)) {
 		if (data2 == 127) {
-            if (!incontrol_mix) {
-                switch( data1 ) {
-                    case SideButton.UP:
-                        primaryDevice.previousParameterPage();
-		                updateIndications();
-                        break;
-                    case SideButton.DOWN:
-                        primaryDevice.nextParameterPage();
-		                updateIndications();
-                        break;
-                    case SideButton.LEFT:
-                        cursorDevice.selectPrevious();
-                        primaryDevice.switchToDevice( DeviceType.ANY, ChainLocation.PREVIOUS);
-                        updateIndications();
-                            break;
-                    case SideButton.RIGHT:
-                        cursorDevice.selectNext();
-                        primaryDevice.switchToDevice( DeviceType.ANY, ChainLocation.NEXT);
-                        updateIndications();
-                        break;
+            println("??")
+            if (MIDIChannel(status) == (invertFactory == "yes" ? 13 : 10)) {
+                if ( data1 == SideButton.UP ) {
+                    println( "up" );
+                    cursorRemoteControls.selectNextPage(true);
+//                    println("cursorName" + cursorRemoteControls.getName().get());
+                } else if ( data1 == SideButton.DOWN ) {
+                    println( "down" );
+                    cursorRemoteControls.selectPreviousPage(true);
+
                 }
-                    
-            } else {
-                switch( data1 ){
-                    case SideButton.UP:
-					    trackBank.scrollTracksPageUp();
-                        break;
-                    case SideButton.DOWN:
-					    trackBank.scrollTracksPageDown();
-                        break;
-                    case SideButton.LEFT:
-					    trackBank.scrollTracksPageLeft();
-                        break;
-                    case SideButton.RIGHT:
-					    trackBank.scrollTracksPageRight();
-                        break;
-				}
-			}
+            } 
 		}
 		// Make rest of the knobs not in the Factory bank freely assignable
 		else if (data1 >= LOWEST_CC && data1 <= HIGHEST_CC) {
@@ -472,6 +445,7 @@ function onSysex(data) {
         }
        
         if ( currentScene == Scenes.FACTORY3 ) {
+            println( "no mix")
            mixerAlignedGrid = false;
            incontrol_mix = false;           
         }

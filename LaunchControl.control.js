@@ -76,6 +76,10 @@ armed = []
 
 function init()
 {
+
+   noteInput = host.getMidiInPort(0).createNoteInput("Launch Control", "80????", "90????");
+   noteInput.setShouldConsumeEvents(false);
+
 	// Setup MIDI in stuff
    host.getMidiInPort(0).setMidiCallback(onMidi);
    host.getMidiInPort(0).setSysexCallback(onSysex);
@@ -96,11 +100,9 @@ function init()
       }
    );
 
-   noteInput = host.getMidiInPort(0).createNoteInput("Launch Control", "80????", "90????");
-   noteInput.setShouldConsumeEvents(false);
    
-	// create a transport section for on Factory Preset 1
-	transport = host.createTransportSection();
+   // create a transport section for on Factory Preset 1
+   transport = host.createTransportSection();
    sendMidi( FPads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
 
    transport.addIsPlayingObserver(function(on) {
@@ -164,7 +166,6 @@ function init()
    cursorTrack = host.createCursorTrackSection(0, 8);
    cursorDevice = host.createCursorDevice();
    masterTrack = host.createMasterTrackSection(0);
-
    primaryDevice = cursorTrack.getPrimaryDevice();
    
    // Make CCs 21-48 freely mappable for all 16 Channels
@@ -250,9 +251,9 @@ var incontrol_pads = true;
 
 function onMidi(status, data1, data2)
 {
-	
-	//printMidi(status, data1, data2);
-	//println(MIDIChannel(status));
+    println( 'MIDI!')	
+//	printMidi(status, data1, data2);
+//	println(MIDIChannel(status));
 	
 	// make Pads green when pressed
 	if(status < 71 || status > 75) {

@@ -395,7 +395,7 @@ function handleFactory1Pads( pad ) {
 		    transport.toggleClick(); 
             break;  
         case Pads.PAD7:
-            transport.toggleLauncherOverdub();
+            transport.toggleOverdub();
             break;
         case Pads.PAD8:
             transport.toggleOverdub();

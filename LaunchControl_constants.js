@@ -3,7 +3,48 @@ var HIGHEST_CC = 48;
 
 var NUM_TRACKS = 8;
 var NUM_SENDS = 2;
-var NUM_SCENES = 1;
+var NUM_SCENES = 8;
+
+var Pads = {
+    PAD1:9,
+    PAD2:10,
+    PAD3:11,
+    PAD4:12,
+    PAD5:25,
+    PAD6:26,
+    PAD7:27,
+    PAD8:28
+}
+
+var PadIndex = [
+    Pads.PAD1,
+    Pads.PAD2,
+    Pads.PAD3,
+    Pads.PAD4,
+    Pads.PAD5,
+    Pads.PAD6,
+    Pads.PAD7,
+    Pads.PAD8
+]
+
+var Scenes = {
+    USER1:0,
+    USER2:1,
+    USER3:2,
+    USER4:3,
+    USER5:4,
+    USER6:5,
+    USER7:6,
+    USER8:7,
+    FACTORY1:8,
+    FACTORY2:9,
+    FACTORY3:10,
+    FACTORY4:11,
+    FACTORY5:12,
+    FACTORY6:13,
+    FACTORY7:14,
+    FACTORY8:15
+}
 
 var SideButton =
 {
@@ -37,6 +78,19 @@ var FactoryPageKnobs =
 	Page8:191
 };
 
+var FactoryPageKnobsInverted = 
+{
+	Page1:191,
+	Page2:190,
+	Page3:189,
+	Page4:188,
+	Page5:187,
+	Page6:186,
+	Page7:185,
+	Page8:184
+};
+
+
 var UserPagePads =
 {
 	Page1:144,
@@ -59,6 +113,18 @@ var FactoryPagePads =
 	Page6:157,
 	Page7:158,
 	Page8:159
+};
+
+var FactoryPagePadsInverted = 
+{
+	Page1:159,
+	Page2:158,
+	Page3:157,
+	Page4:156,
+	Page5:155,
+	Page6:154,
+	Page7:153,
+	Page8:152
 };
 
 var Colour = // Novation are from the UK

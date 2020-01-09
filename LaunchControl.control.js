@@ -1,29 +1,53 @@
+/*
+
+    A Novation LaunchControl script for BitWig-Studio
+
+The User-Pages emmit midi events that can be used to midi-learn the knobs and buttons to in Bitwig
+the script is based on the work of eduk (https://github.com/educk)
+
+The Factory-Pages are mapped to the following functions:
+
+Factory-Page 1: 
+    the top row knobs control volume
+    the lower row knobs controle pan
+    the buttons are mapped to Play, Record, Writing Arranger Automation, Loop, Click, Launcher Overdub, Overdub
+
+Factory-Page 2: 
+    the top row knobs control send1
+    the lower row knobs controle send2
+    the buttons are mapped to mute
+
+Factory-Page 3: 
+    the left 8 knobs are mapped to Macro Functions
+    the right 8 knobs are mapped to Device Parameters
+    the buttons are mapped to record arm 
+
+Factory-Page 3: 
+    the knobs aren't currently mapped
+    the buttons create an empty clip on the next free slot of the selected Track. The button number is the clip lenght in bars
+
+Since selecting the first few factory-pages can be a bit tricky when the launch-control is handled operated with the left hand (at least for me)
+I also added a setting option in the scripts settings dialog that allows to reverse the Page mapping - so page 1 gets page 8, page 2 gets page 7, ...
 
 
-//This is a very basic Launch Control script
-//
-//I'm not terribly great at programming so anyone can take over and help
-// This is what I know
-// The Side Buttons only accept red
-// The status MIDI for the Factory templates come in at status B00 to B15 User templates start at B00 to B07, Factory B08 to B15
-// Colours have been setup in LaunchControl_constants and match Launchpad script
-// data1 for Sidebuttons are 114 to 117, you can use SideButton.UP / DOWN / LEFT / RIGHT
-// Factory preset one has been mapped to Macros on bottom and parameters on top
-// Transport controls for the pads have been setup and next/prev parameter page
-// Rainbow indicators work for both
-// Tried to add light script, can't get it to work, so I just stuck a MIDI out to light them up when pressed.
-// Most code has been copied from Launchpad and Launchey scripts
- 
-
-loadAPI(1);
+*/
+loadAPI(4);
 
 host.defineController("Novation", "Launch Control", "1.0", "05e2b820-177e-11e4-8c21-0800200c9a66");
 host.defineMidiPorts(1, 1);
 host.addDeviceNameBasedDiscoveryPair(["Launch Control"], ["Launch Control"]);
+host.addDeviceNameBasedDiscoveryPair(["Launch Control MIDI 1"], ["Launch Control MIDI 1"]);
+
+
 
 //Load LaunchControl constants containing the status for pages and other constant variables
 load("LaunchControl_constants.js");
 load("LaunchControl_common.js");
+
+
+var FPads = FactoryPagePads;
+var FKnobs = FactoryPageKnobs;
+var invertFactory = "no";
 
 canScrollTracksUp = false;
 canScrollTracksDown = false;
@@ -35,57 +59,144 @@ canScrollUp = false;
 canScrollDown = false;
 mixerAlignedGrid = false;
 
+currentScene = Scenes.FACTORY1;
+
+isPlaying = false;
+isRecording = false;
+isWritingArrangerAutomation = false;
+isLoopActive = false;
+isClickActive = false;
+isOverdubActive = false;
+isLauncherOverdubActive = false;
+
+var hasContent = initArray(0, 64)
+selectedChannel = 0
+muted = []
+armed = []
+
 function init()
 {
-	// Setup MIDI in stuff
-   host.getMidiInPort(0).setMidiCallback(onMidi);
+
    noteInput = host.getMidiInPort(0).createNoteInput("Launch Control", "80????", "90????");
    noteInput.setShouldConsumeEvents(false);
+
+	// Setup MIDI in stuff
+   host.getMidiInPort(0).setMidiCallback(onMidi);
+   host.getMidiInPort(0).setSysexCallback(onSysex);
+
+   var es = host.getPreferences().getEnumSetting( "Invert", "GUI", ["yes", "no"], "no" );
+   es.addValueObserver(
+      function(val) {
+        println( "PREF CHANGE " + val );        
+        invertFactory = val;
+        if ( val == "yes" ) {
+            FPads = FactoryPagePadsInverted;
+            FKnobs = FactoryPageKnobsInverted;
+        } else {
+            FPads = FactoryPagePads;
+            FKnobs = FactoryPageKnobs;
+        }
+
+      }
+   );
+
    
-	// create a transport section for on Factory Preset 1
-	transport = host.createTransportSection();
-	
+   // create a transport section for on Factory Preset 1
+   transport = host.createTransportSection();
+   sendMidi( FPads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
+
+   transport.addIsPlayingObserver(function(on) {
+        sendMidi( FPads.Page1, Pads.PAD2,  on ? Colour.LIME : Colour.GREEN_LOW );
+        isPlaying = on;
+   });
+   transport.addIsRecordingObserver(function(on) {
+        sendMidi( FPads.Page1, Pads.PAD3,  on ? Colour.RED_FULL : Colour.RED_LOW );
+        isRecording = on;
+   });
+   transport.addIsWritingArrangerAutomationObserver(function(on) {
+        sendMidi( FPads.Page1, Pads.PAD4,  on ? Colour.RED_FULL : Colour.OFF );
+        isWritingArrangerAutomation = on;
+   });
+
+   transport.addIsLoopActiveObserver(function(on) {
+        sendMidi( FPads.Page1, Pads.PAD5,  on ? Colour.ORANGE : Colour.OFF );
+        isLoopActive = on;
+   });
+   transport.addClickObserver(function(on) {
+        sendMidi( FPads.Page1, Pads.PAD6,  on ? Colour.ORANGE : Colour.OFF );
+        isClickActive = on;
+   });
+   transport.addLauncherOverdubObserver(function(on) {
+        sendMidi( FPads.Page1, Pads.PAD7,  on ? Colour.RED_FULL : Colour.OFF );
+        isLauncherOverdubActive = on;
+   });
+
+   transport.addOverdubObserver(function(on) {
+        sendMidi( FPads.Page1, Pads.PAD8,  on ? Colour.ORANGE : Colour.OFF );
+        isOverdubActive = on;
+   });
+
+
 	// create a trackbank (arguments are tracks, sends, scenes)
 	trackBank = host.createTrackBankSection(NUM_TRACKS, NUM_SENDS, NUM_SCENES);
+    for ( var i=0; i<8; i++ ) {
+        var track = trackBank.getTrack( i )
+
+        track.getMute().addValueObserver(makeIndexedFunction(i, function(col, on) {
+            muted[ col ] = on;
+            sendMidi( FPads.Page2, PadIndex[col], on ? Colour.ORANGE : Colour.YELLOW_LOW  );
+            
+        }));
+        track.getArm().addValueObserver(makeIndexedFunction(i, function(col, on) {
+            armed[ col ] = on;
+            sendMidi( FPads.Page3, PadIndex[col], on ? Colour.RED_FULL : Colour.LIME );
+        }));
+        track.addIsSelectedInMixerObserver( makeIndexedFunction(i, function( col, on ) { 
+            if ( on ) {
+                selectedChannel = col;
+            }
+        }));
+        var clipLauncher = track.getClipLauncher();
+        clipLauncher.addHasContentObserver( makeSlotIndexedFunction(i, function( track, slot, on ) {
+            hasContent[ track * 8 + slot ] = on;     
+        }));
+    }
 
 	// create a cursor device to move about using the arrows
    cursorTrack = host.createCursorTrackSection(0, 8);
    cursorDevice = host.createCursorDevice();
    masterTrack = host.createMasterTrackSection(0);
-
    primaryDevice = cursorTrack.getPrimaryDevice();
-   
+   remoteControls = primaryDevice.createCursorRemoteControlsPage(8);
+   cursorRemoteControls = primaryDevice.createCursorRemoteControlsPage("right", 8, "");
+   cursorRemoteControls.getName().addValueObserver( function(name) {
+        host.showPopupNotification( name );
+   })
    // Make CCs 21-48 freely mappable for all 16 Channels
    userControls = host.createUserControlsSection((HIGHEST_CC - LOWEST_CC + 1)*16);
 
-   for(var i=LOWEST_CC; i<=HIGHEST_CC; i++)
-   {
-			for (var j=1; j<=16; j++) {
-
-				 // Create the index variable c
-				 var c = i - LOWEST_CC + (j-1) * (HIGHEST_CC-LOWEST_CC+1);
-				 // Set a label/name for each userControl
-				 userControls.getControl(c).setLabel("CC " + i + " - Channel " + j);
-			}
+   for(var i=LOWEST_CC; i<=HIGHEST_CC; i++) {
+       for (var j=1; j<=16; j++) { 
+           // Create the index variable c
+           var c = i - LOWEST_CC + (j-1) * (HIGHEST_CC-LOWEST_CC+1);
+           // Set a label/name for each userControl
+           userControls.getControl(c).setLabel("CC " + i + " - Channel " + j);
+       }
    }
    
-   trackBank.addCanScrollTracksUpObserver(function(canScroll)
-   {
+   trackBank.addCanScrollTracksUpObserver(function(canScroll) {
       canScrollTracksUp = canScroll;
    });
 
-   trackBank.addCanScrollTracksDownObserver(function(canScroll)
-   {
+   trackBank.addCanScrollTracksDownObserver(function(canScroll) {
       canScrollTracksDown = canScroll;
    });
 
-   cursorDevice.addCanSelectNextObserver(function(canScroll)
-   {
+   cursorDevice.addCanSelectNextObserver(function(canScroll) {
       canScrollScenesUp = canScroll;
    });
 
-   cursorDevice.addCanSelectPreviousObserver(function(canScroll)
-   {
+   cursorDevice.addCanSelectPreviousObserver(function(canScroll) {
      canScrollScenesDown = canScroll;
    });
 
@@ -94,147 +205,127 @@ function init()
 }
 
 // This updates the indicators (rainbow things) 
-function updateIndications()
-{
-   for(var i=0; i<8; i++)
-   {
-      primaryDevice.getParameter(i).setIndication(incontrol_knobs);
-      userControls.getControl(i).setIndication(!incontrol_knobs);
-      primaryDevice.getMacro(i).getAmount().setIndication(incontrol_mix);
-      trackBank.getTrack(i).getVolume().setIndication(!incontrol_mix);
+function updateIndications() {
+   for(var i=0; i<8; i++) {
+      trackBank.getTrack(i).getVolume().setIndication( currentScene == Scenes.FACTORY1 ) 
+      trackBank.getTrack(i).getPan().setIndication( currentScene == Scenes.FACTORY1 ) 
+
+      trackBank.getTrack(i).getSend(0).setIndication( currentScene == Scenes.FACTORY2 ) 
+      trackBank.getTrack(i).getSend(1).setIndication( currentScene == Scenes.FACTORY2 ) 
+
+      var isUserControl = (currentScene != Scenes.FACTORY1 && currentScene != Scenes.FACTORY2 && currentScene !=Scenes.FACTORY3)
+      userControls.getControl(i).setIndication( isUserControl );
    }
+
+   if ( currentScene == Scenes.FACTORY1 ) {
+       sendMidi( FPads.Page1, Pads.PAD1, Colour.YELLOW_LOW );
+       sendMidi( FPads.Page1, Pads.PAD2, isPlaying ? Colour.LIME : Colour.GREEN_LOW );
+       sendMidi( FPads.Page1, Pads.PAD3, isRecording ? Colour.RED_FULL : Colour.RED_LOW );
+       sendMidi( FPads.Page1, Pads.PAD4, isWritingArrangerAutomation ? Colour.RED_FULL : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD5, isLoopActive ? Colour.ORANGE : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD6, isClickActive ? Colour.ORANGE : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD7, isLauncherOverdubActive ? Colour.RED_FULL : Colour.OFF );
+       sendMidi( FPads.Page1, Pads.PAD8, isOverdubActive ? Colour.ORANGE : Colour.OFF );
+
+  } else if ( currentScene == Scenes.FACTORY2 ) {
+        for ( var i=0; i<8; i++) {
+            sendMidi( FPads.Page2, PadIndex[i], muted[ i ]  ?  Colour.ORANGE : Colour.YELLOW_LOW  );
+        }
+ 
+  } else if ( currentScene == Scenes.FACTORY3 ) {
+        for ( var i=0; i<8; i++) {
+            sendMidi( FPads.Page3, PadIndex[i], armed[ i ]  ?  Colour.RED_FULL : Colour.LIME  );
+            
+        }
+  } else if ( currentScene == Scenes.FACTORY4 ) {
+        for ( var i=0; i<8; i++) {
+            sendMidi( FPads.Page4, PadIndex[i], Colour.RED_LOW );
+        }
+ }
+
+
 }
 
 var incontrol_mix = true;
 var incontrol_knobs = true;
 var incontrol_pads = true;
 
-function onMidi(status, data1, data2)
-{
-	
-	printMidi(status, data1, data2);
-	println(MIDIChannel(status));
+function onMidi(status, data1, data2) {
+//	printMidi(status, data1, data2);
+//	println(MIDIChannel(status));
 	
 	// make Pads green when pressed
 	if(status < 71 || status > 75) {
-		sendMidi(status, data1, 60);
+//		sendMidi(status, data1, 60);
 	}
 	//If Side Buttons make red when pressed // Doesn't work for some reason
 	else if (data2 == 127) {
-		sendMidi(status, 0x + data1, Colour.RED_FULL);
+		//sendMidi(status, 0x + data1, Colour.RED_FULL);
 	}
 	//Turn Off Side Buttons if not pressed.
 	else if (data2 == 0) {
-		sendMidi(status, 0x + data1, Colour.OFF);	
+		//sendMidi(status, 0x + data1, Colour.OFF);	
 	}
 	
-	if (status == FactoryPagePads.Page1 && data2 == 127)
-    {
-      // Factory Preset 1 = Transport Controls and Parameter selector
-      if (data1 == 9)
-      {
-	  	transport.stop();
-      }
-      else if (data1 == 10)
-      {
-        transport.play();			     
-      }
-      else if (data1 == 11)
-      {
-        transport.record(); 
-      }
-      else if (data1 == 12)
-      {
-		transport.toggleWriteArrangerAutomation();
-      }
-      else if (data1 == 25)
-      {
-		transport.toggleLoop();
-      }
-      else if (data1 == 26)
-      {
-		transport.toggleClick(); 
-      }
-	  else if (data1 == 27)
-      {
-         primaryDevice.previousParameterPage();
-		 updateIndications();
-      }
-	  else if (data1 == 28)
-      {
-         primaryDevice.nextParameterPage();
-		 updateIndications();
-      }
-    }
-	 // Factory Preset 1 = Setup knobs to control Macros and Parameters
-	if (status == FactoryPageKnobs.Page1){
-		if (data1 >= 21 && data1 <= 28)
-		{
-			var knobIndexTop = data1 - 21;
-			primaryDevice.getParameter(knobIndexTop).set(data2, 128);
-		}
-		else if (data1 >= 41 && data1 <= 48)
-		{
-			var knobIndexBottom = data1 - 41;
-			primaryDevice.getMacro(knobIndexBottom).getAmount().set(data2, 128);
-		}
-	}
-	// If not on a Factory Bank already assigned then make the knobs assignable and assign those arrows on the right of the control to move around the tracks and devices on the screen
-	if (isChannelController(status))
-	{
-		if (data2 == 127)
+	if (status == FPads.Page1 && data2 == 127) {
+        // Factory Preset 1 = Transport Controls and Parameter selector
+        handleFactory1Pads( data1 )
+    } else if (status == FPads.Page2 && data2 == 127) {
+        handleFactory2Pads( data1 )
+    } else if (status == FPads.Page3 && data2 == 127) {
+        handleFactory3Pads( data1 )
+    } else if (status == FPads.Page4 && data2 == 127) {
+        handleFactory4Pads( data1 )
 
-		{
-			if (data1 == SideButton.UP)
-			{
-				if (incontrol_mix)
-				{
-					cursorTrack.selectPrevious();
-				}
-				else
-				{
-					trackBank.scrollTracksPageUp();
-				}
-			}
-			else if (data1 == SideButton.DOWN)
-			{
-				if (incontrol_mix)
-				{
-					cursorTrack.selectNext();
-				}
-				else
-				{
-					trackBank.scrollTracksPageDown();
-				}
-			}
-			else if (data1 == SideButton.LEFT)
-			{
-				if (incontrol_mix)
-				{
-					cursorDevice.selectPrevious();
-					primaryDevice.switchToDevice(DeviceType.ANY, ChainLocation.PREVIOUS)
-				}
-				else
-				{
-					trackBank.scrollTracksPageUp();
-				}
-			}
-			else if (data1 == SideButton.RIGHT)
-			{
-				if (incontrol_mix)
-				{
-					cursorDevice.selectNext();
-					primaryDevice.switchToDevice(DeviceType.ANY, ChainLocation.NEXT)
-				}
-				else
-				{
-					trackBank.scrollTracksPageDown();
-				}
-			}
+    }
+
+	if (status == FKnobs.Page1 && isTopRow( data1 )){
+		trackBank.getTrack( knobIndex( data1 )).getVolume().set(data2, 128);
+
+	} else if ( status == FKnobs.Page1 && isBottomRow( data1 )) {
+		trackBank.getTrack( knobIndex( data1 )).getPan().set(data2, 128);
+
+	} else if (status == FKnobs.Page2 && isTopRow( data1 )){
+		trackBank.getTrack( knobIndex( data1 )).getSend(0).set(data2, 128);
+
+	} else if ( status == FKnobs.Page2 && isBottomRow( data1 )) {
+		trackBank.getTrack( knobIndex( data1 )).getSend(1).set(data2, 128);
+
+	} else if (status == FKnobs.Page3 && isTopRow( data1 )){
+        var idx = knobIndex( data1 )
+        if ( idx < 4 ) {
+	        remoteControls.getParameter( idx ).value().set(data2, 128);
+        } else {
+	        cursorRemoteControls.getParameter( idx-4 ).value().set(data2, 128);
+        }
+
+     } else if (status == FKnobs.Page3 && isBottomRow( data1 )){
+        var idx = knobIndex( data1 )
+        if ( idx < 4 ) {
+	        remoteControls.getParameter( idx+4 ).value().set(data2, 128);
+        } else {
+	        cursorRemoteControls.getParameter( idx ).value().set(data2, 128);
+        }
+    } else 
+
+	// If not on a Factory Bank already assigned then make the knobs assignable and assign those arrows on the right of the control to move around the tracks and devices on the screen
+	if (isChannelController(status)) {
+		if (data2 == 127) {
+            println("??")
+            if (MIDIChannel(status) == (invertFactory == "yes" ? 13 : 10)) {
+                if ( data1 == SideButton.UP ) {
+                    println( "up" );
+                    cursorRemoteControls.selectNextPage(true);
+//                    println("cursorName" + cursorRemoteControls.getName().get());
+                } else if ( data1 == SideButton.DOWN ) {
+                    println( "down" );
+                    cursorRemoteControls.selectPreviousPage(true);
+
+                }
+            } 
 		}
 		// Make rest of the knobs not in the Factory bank freely assignable
-		else if (data1 >= LOWEST_CC && data1 <= HIGHEST_CC)
-		{
+		else if (data1 >= LOWEST_CC && data1 <= HIGHEST_CC) {
 			var index = data1 - LOWEST_CC + (HIGHEST_CC * MIDIChannel(status));
 			userControls.getControl(index).set(data2, 128);
 		}
@@ -243,23 +334,32 @@ function onMidi(status, data1, data2)
    updateOutputState();
 }
 
+function isTopRow( knob ) {
+    return knob >= 21 && knob <= 28;
+}
+
+function isBottomRow( knob ) {
+    return knob >= 41 && knob <= 48;
+}
+
+function knobIndex( knob ) {
+    return knob -( isTopRow( knob ) ? 21 : 41 );
+}
+
 //Works
-function exit()
-{
+function exit() {
    sendMidi(0xB8, 0x00, 0x00);
 }
 
-function updateScrollButtons()
-{
+function updateScrollButtons() {
    setSideLED(0, canScrollUp ? Colour.RED_FULL : Colour.RED_FULL);
    setSideLED(1, canScrollDown ? Colour.RED_FULL : Colour.OFF);
    setSideLED(2, canScrollLeft ? Colour.RED_FULL : Colour.OFF);
    setSideLED(3, canScrollRight ? Colour.RED_FULL : Colour.OFF);
-};
+}
 
-function setSideLED(index, colour)
-{
-   sendMidi(0xb8, (72 + index), colour);
+function setSideLED(index, colour) {
+  sendMidi(0xb8, (72 + index), colour);
 }
 
 function updateOutputState()
@@ -273,3 +373,99 @@ function updateOutputState()
 
    updateScrollButtons();
 };
+
+function handleFactory1Pads( pad ) {
+      switch( pad ) {
+        case Pads.PAD1:
+	  	    transport.stop();
+            break;
+        case Pads.PAD2: 
+            transport.play();			     
+            break;
+        case Pads.PAD3: 
+            transport.record(); 
+            break;
+        case Pads.PAD4:
+            transport.toggleWriteArrangerAutomation();
+            break;
+        case Pads.PAD5:
+		    transport.toggleLoop();
+            break;
+        case Pads.PAD6:
+		    transport.toggleClick(); 
+            break;  
+        case Pads.PAD7:
+            transport.toggleOverdub();
+            break;
+        case Pads.PAD8:
+            transport.toggleOverdub();
+            break;
+      }
+}
+
+
+function handleFactory2Pads( pad ) {
+      var idx = PadIndex.indexOf( pad )
+      trackBank.getTrack( idx ).getMute().toggle();
+}
+
+
+function handleFactory3Pads( pad ) {
+      var idx = PadIndex.indexOf( pad )
+      var track = trackBank.getTrack( idx )
+      var old = armed[idx]
+      track.getArm().toggle();
+      if ( !old ) {
+        track.selectInMixer()
+      }
+}
+
+function handleFactory4Pads( pad ) {
+    for ( var i=0; i<8; i++) {
+        if ( !hasContent[ selectedChannel * 8 + i ] ) {
+            emptySlot = i;
+            break;
+        }
+    }    
+    println( emptySlot )
+    if ( emptySlot == -1 ) {
+        return
+    } else {
+       var idx = PadIndex.indexOf( pad );
+       trackBank.getTrack( selectedChannel ).getClipLauncherSlots().createEmptyClip( emptySlot, (idx+1) * 4 );
+    }
+}
+
+function onSysex(data) {
+    if ( data.substring(0,14) == 'f0002029020a77' ) {
+        currentScene = parseInt( data.substring(14,16), 16)     
+        
+        if ( currentScene >= 8 && invertFactory == "yes" ) {
+            currentScene = 15 - (currentScene -8);
+        }
+       
+        if ( currentScene == Scenes.FACTORY3 ) {
+            println( "no mix")
+           mixerAlignedGrid = false;
+           incontrol_mix = false;           
+        }
+        
+        if ( currentScene == Scenes.FACTORY1 || currentScene == Scenes.FACTORY2 || currentScene == Scenes.FACTORY4) {
+            mixerAlignedGrid = true;
+            incontrol_mix = true;
+        }
+        updateIndications();
+    }
+}
+
+function makeIndexedFunction(index, f) {
+    return function(value) {
+        f(index, value);
+    };
+}
+
+function makeSlotIndexedFunction( track, f) {
+    return function( s, v) {
+        f(track, s, v)
+    }
+}
